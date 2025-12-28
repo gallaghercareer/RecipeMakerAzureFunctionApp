@@ -23,36 +23,50 @@ public class GetRecipes
      [TableInput("Recipes", Connection = "AzureWebJobsStorage")] TableClient tableClient,
      FunctionContext executionContext)
     {
-        string? userId = null;
+        try
+        {
+            string? userId = null;
 
-        //testing for local
-        #if DEBUG
-                // 1. Local Testing Mode (Visual Studio 2022 F5)
-                // This bypasses the need for a real login token so you can test your logic instantly.
-                userId = "local-chef-123";
-                _logger.LogInformation("DEBUG MODE: Using mock user ID: {userId}", userId);
-        #else
+            //testing for local
+#if DEBUG
+            // 1. Local Testing Mode (Visual Studio 2022 F5)
+            // This bypasses the need for a real login token so you can test your logic instantly.
+            userId = "local-chef-123";
+            _logger.LogInformation("DEBUG MODE: Using mock user ID: {userId}", userId);
+#else
 
                 var user = executionContext.Features.Get<ClaimsPrincipal>();
                  userId = user?.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value;
-        #endif
-        if (string.IsNullOrEmpty(userId)) return req.CreateResponse(System.Net.HttpStatusCode.Unauthorized);
+#endif
 
-        // STRONG TYPED QUERY: Using <RecipeEntity> here is the magic part
-        var recipePage = tableClient.Query<RecipeEntity>(filter: $"PartitionKey eq '{userId}'");
+            if (string.IsNullOrEmpty(userId)) return req.CreateResponse(System.Net.HttpStatusCode.Unauthorized);
 
-        // Convert the page to a list so it's easier for the frontend to read
-        var recipeList = recipePage.ToList();
+            // STRONG TYPED QUERY: Using <RecipeEntity> here is the magic part
+            var recipePage = tableClient.Query<RecipeEntity>(filter: $"PartitionKey eq '{userId}'");
+
+            // Convert the page to a list so it's easier for the frontend to read
+            var recipeList = recipePage.ToList();
 
 
-        var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+            var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
 
-        // 'private' = only for this user. 'max-age=300' = 5 minutes.
-        //The user 'refreshing' the page won't spam the Azure function. Reduces cost.
-        response.Headers.Add("Cache-Control", "private, max-age=300");
+            // 'private' = only for this user. 'max-age=300' = 5 minutes.
+            //The user 'refreshing' the page won't spam the Azure function. Reduces cost.
+            response.Headers.Add("Cache-Control", "private, max-age=300");
 
-        await response.WriteAsJsonAsync(recipeList);
+            await response.WriteAsJsonAsync(recipeList);
 
-        return response;
+            return response;
+        }
+        catch (Exception ex)
+        {
+            
+            _logger.LogCritical(ex, "GetRecipes CRASHED");
+
+            // sends the stack trace to your browser
+            var errorResponse = req.CreateResponse(System.Net.HttpStatusCode.InternalServerError);
+            await errorResponse.WriteStringAsync($"DEBUG ERROR: {ex.Message} \n\n {ex.StackTrace}");
+            return errorResponse;
+        }
     }
 }
