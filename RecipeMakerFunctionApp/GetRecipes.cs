@@ -58,15 +58,31 @@ public class GetRecipes
 
             return response;
         }
-        catch (Exception ex)
-        {
-            
-            _logger.LogCritical(ex, "GetRecipes CRASHED");
+      
 
-            // sends the stack trace to your browser
+
+           catch (Exception ex)
+        {
+            // 1. Generate a unique ID for this specific crash
+            var correlationId = Guid.NewGuid().ToString();
+
+            // 2. Log EVERYTHING to Azure securely. 
+            // This includes the stack trace, the correlation ID, and the exception.
+            _logger.LogCritical(ex, "GetRecipes CRASHED. CorrelationId: {CorrelationId}", correlationId);
+
             var errorResponse = req.CreateResponse(System.Net.HttpStatusCode.InternalServerError);
+
+            // 3. Different responses based on environment
+#if DEBUG
+            // Locally, keep the detail for fast fixing
             await errorResponse.WriteStringAsync($"DEBUG ERROR: {ex.Message} \n\n {ex.StackTrace}");
+#else
+    // In Production, send a safe message with the ID
+    await errorResponse.WriteStringAsync($"An internal error occurred. Error ID: {correlationId}");
+#endif
+
             return errorResponse;
         }
+    }
     }
 }
