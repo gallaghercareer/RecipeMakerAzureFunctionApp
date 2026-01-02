@@ -26,12 +26,12 @@ public class GetRecipes
             string? userId = null;
 
 #if DEBUG
-            // 1. Local Testing: Use a hardcoded ID so you don't need a real login token locally.
+            //local testing of userid as the header won't conta
             userId = "local-chef-123";
             _logger.LogInformation("DEBUG MODE: Using mock user ID: {userId}", userId);
 #else
-            // 2. Production: Use the Standard Platform Header.
-            // When "Easy Auth" is enabled, Azure injects the 'oid' (Object ID) into this header.
+            
+            //grab user ID from the token, x-ms-client-principlal-id is the "sub" value of the decoded token
             if (req.Headers.TryGetValues("X-MS-CLIENT-PRINCIPAL-ID", out var principalIds))
             {
                 userId = principalIds.FirstOrDefault();
