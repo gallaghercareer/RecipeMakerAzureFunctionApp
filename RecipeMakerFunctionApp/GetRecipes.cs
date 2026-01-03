@@ -52,7 +52,7 @@ public class GetRecipes
             var response = req.CreateResponse(HttpStatusCode.OK);
 
             // Standard performance optimization: Cache for 5 minutes.
-            response.Headers.Add("Cache-Control", "private, max-age=300");
+            //response.Headers.Add("Cache-Control", "private, max-age=300");
 
             await response.WriteAsJsonAsync(recipeList);
             return response;
