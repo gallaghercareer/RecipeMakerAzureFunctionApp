@@ -1,3 +1,4 @@
+using Azure.Data.Tables;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
@@ -30,10 +31,25 @@ public class CreateRecipe
             userId = principalIds.FirstOrDefault();
         }
 #endif
-       
+    
         string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-        var data = JsonSerializer.Deserialize<RecipeEntity>(requestBody);
 
+
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+        var data = JsonSerializer.Deserialize<RecipeEntity>(requestBody, options);
+        
+        //if (data == null || string.IsNullOrEmpty(data.Category))
+        //{
+        //    _logger.LogError("Invalid recipe data received.");
+
+        //    // We must return a valid response object that indicates failure
+        //    // We'll use a 400 Bad Request
+        //    return new CreateRecipeMultiResponse
+        //    {
+        //        HttpResponse = new BadRequestObjectResult("Recipe data or Category is missing.")
+        //    };
+        //}
         _logger.LogInformation($"Creating recipe for user: {userId}");
 
         
@@ -45,7 +61,7 @@ public class CreateRecipe
             Ingredients = data.Ingredients,
             Steps = data.Steps,
             Url = data.Url,
-            Category = data.Category
+            Category = data.Category    
         };
 
         // Sanitizing the RowKey for the database
@@ -55,22 +71,32 @@ public class CreateRecipe
         {
             PartitionKey = userId,
             RowKey = "category_" + safeCategoryKey,
-            CategoryName = data.Category
+            CategoryName = data.Category// data.Category
 
         };
 
+        //if category already exists in a row, upsert
+        string connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+        TableClient tableClient = new TableClient(connectionString, "Recipes");
+        await tableClient.UpsertEntityAsync(NewCategory, TableUpdateMode.Replace);
+
+        _logger.LogInformation($"DEBUG: NewCategory.CategoryName is: {NewCategory.CategoryName}");
         return new CreateRecipeMultiResponse
         {
             // This  creates the recipe row
-            recipe = NewRecipe,
+            Recipe = NewRecipe,
 
-            //This creates the category row
-            category = NewCategory,
+            //null due to upsert change
+            Category = null,
 
             // This property sends the response to the website
-            HttpResponse = new OkObjectResult(NewRecipe)
-
+            HttpResponse = new OkObjectResult(new
+            {
+                recipe = NewRecipe,
+                category = NewCategory
+            })
             
+
         };
     }
 }

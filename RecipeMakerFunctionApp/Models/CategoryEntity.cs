@@ -16,6 +16,6 @@ namespace RecipeMakerFunctionApp.Models
         public ETag ETag { get; set; }
 
         public string EntityType { get; set; } = "Category";
-        public string CategoryName { get; set; }
+        public string? CategoryName { get; set; }
     }
 }

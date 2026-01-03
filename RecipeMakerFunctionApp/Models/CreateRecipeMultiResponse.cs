@@ -12,13 +12,13 @@ namespace RecipeMakerFunctionApp.Models
     {
         //tableoutput
         [TableOutput("Recipes", Connection = "AzureWebJobsStorage")]
-        public RecipeEntity? recipe { get; set; }
+        public RecipeEntity? Recipe { get; set; }
 
         [TableOutput("Recipes", Connection = "AzureWebJobsStorage")]
-        public CategoryEntity? category { get; set; }
+        public CategoryEntity? Category { get; set; }
         
         [HttpResult]
-        public IActionResult HttpResponse { get; set; }
+        public IActionResult? HttpResponse { get; set; }
 
         //httpresponse to client
 
