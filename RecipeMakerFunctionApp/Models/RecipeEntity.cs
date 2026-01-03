@@ -15,5 +15,6 @@ public class RecipeEntity : ITableEntity
     public string Steps { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
+    public string EntityType { get; set; } = "recipe";
 
 }

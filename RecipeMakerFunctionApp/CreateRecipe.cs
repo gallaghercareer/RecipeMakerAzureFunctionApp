@@ -21,11 +21,9 @@ public class CreateRecipe
     public async Task<CreateRecipeMultiResponse> Run([HttpTrigger(AuthorizationLevel.Anonymous, "post")] HttpRequest req)
     {
 
+        string userId = "local-chef-123";
+#if !DEBUG
 
-#if DEBUG
-        //local testing
-        string userId = "local-chef-123"; 
-#else      
         //production
         if (req.Headers.TryGetValue("X-MS-CLIENT-PRINCIPAL-ID", out var principalIds))
         {
@@ -42,7 +40,7 @@ public class CreateRecipe
        RecipeEntity NewRecipe = new RecipeEntity()
         {
             PartitionKey = userId,
-            RowKey = Guid.NewGuid().ToString(),
+            RowKey = "recipe_" + Guid.NewGuid().ToString(),
             Title = data.Title,
             Ingredients = data.Ingredients,
             Steps = data.Steps,
@@ -50,13 +48,29 @@ public class CreateRecipe
             Category = data.Category
         };
 
+        // Sanitizing the RowKey for the database
+        string safeCategoryKey = data.Category.Replace(" ", "_").ToLower();
+
+        CategoryEntity NewCategory = new CategoryEntity()
+        {
+            PartitionKey = userId,
+            RowKey = "category_" + safeCategoryKey,
+            CategoryName = data.Category
+
+        };
+
         return new CreateRecipeMultiResponse
         {
-            // This property sends the data to the queue
+            // This  creates the recipe row
             recipe = NewRecipe,
+
+            //This creates the category row
+            category = NewCategory,
 
             // This property sends the response to the website
             HttpResponse = new OkObjectResult(NewRecipe)
+
+            
         };
     }
 }
