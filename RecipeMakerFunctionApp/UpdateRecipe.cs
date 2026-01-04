@@ -46,10 +46,8 @@ public class UpdateRecipe
             updatedData.PartitionKey = userId;
             updatedData.ETag = ETag.All;
 
-            // 1. Update the Recipe itself
             await tableClient.UpdateEntityAsync(updatedData, updatedData.ETag, TableUpdateMode.Replace);
 
-            // 2. NEW: Ensure the new category exists (Upsert)
             if (!string.IsNullOrEmpty(updatedData.Category))
             {
                 string safeCategoryKey = updatedData.Category.Replace(" ", "_").ToLower();
