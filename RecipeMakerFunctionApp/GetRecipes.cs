@@ -3,6 +3,7 @@ using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 using Azure.Data.Tables;
 using System.Net;
+using RecipeMakerFunctionApp.Models; // Ensure your namespace for entities is included
 
 namespace RecipeMakerFunctionApp;
 
@@ -26,52 +27,84 @@ public class GetRecipes
             string? userId = null;
 
 #if DEBUG
-            //local testing of userid as the header won't conta
             userId = "local-chef-123";
             _logger.LogInformation("DEBUG MODE: Using mock user ID: {userId}", userId);
 #else
-            
-            //grab user ID from the token, x-ms-client-principlal-id is the "sub" value of the decoded token
             if (req.Headers.TryGetValues("X-MS-CLIENT-PRINCIPAL-ID", out var principalIds))
             {
                 userId = principalIds.FirstOrDefault();
             }
 #endif
 
-            // Validation: If no ID is found, return 401.
             if (string.IsNullOrEmpty(userId))
             {
-                _logger.LogWarning("Unauthorized: Identity header missing. Check Authentication settings.");
+                _logger.LogWarning("Unauthorized: Identity header missing.");
                 return req.CreateResponse(HttpStatusCode.Unauthorized);
             }
 
-            // Perform the query using the validated User ID as the PartitionKey.
-            var recipePage = tableClient.Query<RecipeEntity>(filter: $"PartitionKey eq '{userId}'");
-            var recipeList = recipePage.ToList();
+            // 1. Query for the generic TableEntity to capture all varying columns
+            var entities = tableClient.Query<TableEntity>(filter: $"PartitionKey eq '{userId}'");
+
+            // 2. Prepare lists for each entity type
+            var recipeList = new List<RecipeEntity>();
+            var groceryLists = new List<GroceriesEntity>();
+
+            foreach (var entity in entities)
+            {
+                // Use EntityType to decide which class to instantiate
+                // Note: .ToLower() helps avoid casing issues (e.g., "recipe" vs "Recipe")
+                string type = entity.GetString("EntityType")?.ToLower() ?? "recipe";
+
+                if (type == "grocerylist")
+                {
+                    groceryLists.Add(new GroceriesEntity
+                    {
+                        PartitionKey = entity.PartitionKey,
+                        RowKey = entity.RowKey,
+                        Timestamp = entity.Timestamp,
+                        ETag = entity.ETag,
+                        EntityType = "GroceryList",
+                        Items = entity.GetString("Items") ?? "[]"
+                    });
+                }
+                else
+                {
+                    recipeList.Add(new RecipeEntity
+                    {
+                        PartitionKey = entity.PartitionKey,
+                        RowKey = entity.RowKey,
+                        Timestamp = entity.Timestamp,
+                        ETag = entity.ETag,
+                        EntityType = "recipe",
+                        Title = entity.GetString("Title") ?? string.Empty,
+                        Ingredients = entity.GetString("Ingredients") ?? string.Empty,
+                        Steps = entity.GetString("Steps") ?? string.Empty,
+                        Url = entity.GetString("Url") ?? string.Empty,
+                        Category = entity.GetString("Category") ?? string.Empty
+                    });
+                }
+            }
 
             var response = req.CreateResponse(HttpStatusCode.OK);
 
-            // Standard performance optimization: Cache for 5 minutes.
-            //response.Headers.Add("Cache-Control", "private, max-age=300");
+            // 3. Send back a combined object so your React frontend receives both lists
+            await response.WriteAsJsonAsync(new
+            {
+                Recipes = recipeList,
+                GroceryLists = groceryLists
+            });
 
-            await response.WriteAsJsonAsync(recipeList);
             return response;
         }
         catch (Exception ex)
         {
-            // The "Safer Way": Log the details but give the user a generic ID.
             var correlationId = Guid.NewGuid().ToString();
-
-            // This ensures the full Stack Trace is searchable in App Insights by ID.
             _logger.LogCritical(ex, "GetRecipes CRASHED. CorrelationId: {CorrelationId}", correlationId);
-
             var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
 
 #if DEBUG
-            // In VS 2022, you see the full error immediately.
             await errorResponse.WriteStringAsync($"DEBUG ERROR: {ex.Message} \n\n {ex.StackTrace}");
 #else
-            // In Production, the user sees a secure reference ID.
             await errorResponse.WriteStringAsync($"An internal error occurred. Ref: {correlationId}");
 #endif
             return errorResponse;
