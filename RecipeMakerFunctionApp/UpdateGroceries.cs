@@ -21,8 +21,14 @@ public class UpdateGroceries
     [Function("UpdateGroceries")]
     public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous, "put")] HttpRequest req)
     {
-        string userId = "local-chef-123";
 
+        string userId = "local-chef-123";
+        #if !DEBUG
+                if (req.Headers.TryGetValue("X-MS-CLIENT-PRINCIPAL-ID", out var principalIds))
+                {
+                    userId = principalIds.FirstOrDefault();
+                }
+        #endif
         _logger.LogInformation("Attempting to update groceries for user: {UserId}", userId);
 
         try
